@@ -17,9 +17,9 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: root
-          POSTGRES_PASSWORD: xht232431
-          POSTGRES_DB: portfolio
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
         ports:
           - 5432:5432
         options: >-
@@ -46,6 +46,10 @@ jobs:
 
       - name: Run migrations
         run: make migrateup
+        env:
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
 
       - name: Install dependencies
         run: |
@@ -58,15 +62,21 @@ jobs:
       - name: Test
         run: go test -v ./... -cover
         env:
-          DB_USER: root
-          DB_PASSWORD: xht232431
-          DB_NAME: portfolio
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
           DB_HOST: localhost
           DB_PORT: 5432
 
       - name: Run vet
         run: |
           go vet ./...
+        env:
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_HOST: localhost
+          DB_PORT: 5432
 
   build:
     name: Build
