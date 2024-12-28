@@ -11,7 +11,10 @@ import (
 type Store interface {
 	Querier
 	CreatePostTx(ctx context.Context, arg CreatePostTxParams) (Post, error)
-	// Add other transaction methods as needed
+	UploadPostImageTx(ctx context.Context, arg UploadPostImageTxParams) error
+	UpdatePostTx(ctx context.Context, arg UpdatePostTxParams) (UpdatePostTxResult, error)
+	AddPostTagTx(ctx context.Context, arg PostTagTxParams) (PostTag, error)
+	BatchAddPostTagsTx(ctx context.Context, arg BatchAddPostTagsParams) ([]PostTag, error)
 }
 
 type SQLStore struct {

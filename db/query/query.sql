@@ -18,6 +18,12 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM users
 WHERE email = $1 LIMIT 1;
 
+-- name: ListUsers :many
+SELECT id, username, email, first_name, last_name, bio, created_at, updated_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
 -- name: UpdateUser :one
 UPDATE users
 SET 
@@ -71,13 +77,13 @@ SELECT
   p.*,
   u.username,
   COUNT(DISTINCT c.id) as comment_count,
-  array_agg(DISTINCT t.name) as tags
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN comments c ON p.id = c.post_id
 LEFT JOIN post_tags pt ON p.id = pt.post_id
 LEFT JOIN tags t ON pt.tag_id = t.id
-WHERE p.status = $1
+WHERE ($1::text IS NULL OR p.status = $1)
 GROUP BY p.id, u.id
 ORDER BY p.created_at DESC
 LIMIT $2 OFFSET $3;

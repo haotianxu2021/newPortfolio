@@ -526,22 +526,22 @@ SELECT
   p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at,
   u.username,
   COUNT(DISTINCT c.id) as comment_count,
-  array_agg(DISTINCT t.name) as tags
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN comments c ON p.id = c.post_id
 LEFT JOIN post_tags pt ON p.id = pt.post_id
 LEFT JOIN tags t ON pt.tag_id = t.id
-WHERE p.status = $1
+WHERE ($1::text IS NULL OR p.status = $1)
 GROUP BY p.id, u.id
 ORDER BY p.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListPostsParams struct {
-	Status sql.NullString `json:"status"`
-	Limit  int32          `json:"limit"`
-	Offset int32          `json:"offset"`
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
 }
 
 type ListPostsRow struct {
@@ -559,7 +559,7 @@ type ListPostsRow struct {
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPosts, arg.Status, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listPosts, arg.Column1, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -649,6 +649,61 @@ func (q *Queries) ListUserImages(ctx context.Context, arg ListUserImagesParams) 
 			&i.FilePath,
 			&i.AltText,
 			&i.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, email, first_name, last_name, bio, created_at, updated_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListUsersParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListUsersRow struct {
+	ID        int32          `json:"id"`
+	Username  string         `json:"username"`
+	Email     string         `json:"email"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+	Bio       sql.NullString `json:"bio"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+	UpdatedAt sql.NullTime   `json:"updated_at"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersRow{}
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.Bio,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
