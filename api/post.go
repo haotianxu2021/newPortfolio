@@ -125,7 +125,7 @@ func (server *Server) updatePost(ctx *gin.Context) {
 func (server *Server) getPost(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
-	if err != nil {
+	if err != nil || id <= 0 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
@@ -142,14 +142,14 @@ func (server *Server) getPost(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"id":         post.ID,
-		"user_id":    post.UserID,
+		"user_id":    post.UserID.Int32,
 		"title":      post.Title,
 		"content":    post.Content,
 		"type":       post.Type,
-		"status":     post.Status,
+		"status":     post.Status.String,
 		"created_at": post.CreatedAt,
 		"updated_at": post.UpdatedAt,
-		"username":   post.Username,
+		"username":   post.Username.String,
 		"first_name": post.FirstName,
 		"last_name":  post.LastName,
 		"tags":       post.Tags,
@@ -200,7 +200,7 @@ func (server *Server) listPosts(ctx *gin.Context) {
 			"title":         post.Title,
 			"content":       post.Content,
 			"type":          post.Type,
-			"status":        post.Status,
+			"status":        post.Status.String,
 			"created_at":    post.CreatedAt,
 			"updated_at":    post.UpdatedAt,
 			"username":      post.Username,

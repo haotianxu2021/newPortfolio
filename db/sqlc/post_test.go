@@ -51,12 +51,9 @@ func TestListPosts(t *testing.T) {
 	}
 
 	arg := ListPostsParams{
-		Status: sql.NullString{
-			String: "published",
-			Valid:  true,
-		},
-		Limit:  5,
-		Offset: 0,
+		Column1: "published",
+		Limit:   5,
+		Offset:  0,
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), arg)
