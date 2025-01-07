@@ -17,14 +17,36 @@ type Config struct {
 
 // loadEnvFile reads and parses the .env file if it exists
 func loadEnvFile(filename string) error {
-	file, err := os.Open(filename)
+	// Try to find .env in current directory and parent directories
+	dir, err := os.Getwd()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // It's okay if .env doesn't exist
-		}
-		return fmt.Errorf("error opening .env file: %w", err)
+		return fmt.Errorf("error getting working directory: %w", err)
 	}
-	defer file.Close()
+
+	// Keep going up until we find .env or hit the root
+	for {
+		envPath := dir + string(os.PathSeparator) + filename
+		file, err := os.Open(envPath)
+		if err == nil {
+			defer file.Close()
+			return parseEnvFile(file)
+		}
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error opening .env file: %w", err)
+		}
+
+		// Go up one directory
+		parent := dir[:strings.LastIndex(dir, string(os.PathSeparator))]
+		if parent == dir {
+			// We've hit the root
+			return nil
+		}
+		dir = parent
+	}
+}
+
+// parseEnvFile parses an open .env file
+func parseEnvFile(file *os.File) error {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
