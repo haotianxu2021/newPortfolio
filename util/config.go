@@ -36,12 +36,12 @@ func loadEnvFile(filename string) error {
 		}
 
 		// Go up one directory
-		parent := dir[:strings.LastIndex(dir, string(os.PathSeparator))]
-		if parent == dir {
+		lastSep := strings.LastIndex(dir, string(os.PathSeparator))
+		if lastSep == -1 {
 			// We've hit the root
 			return nil
 		}
-		dir = parent
+		dir = dir[:lastSep]
 	}
 }
 
