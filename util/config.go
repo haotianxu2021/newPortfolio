@@ -76,25 +76,37 @@ func parseEnvFile(file *os.File) error {
 
 // LoadConfig reads configuration from environment variables or file
 func LoadConfig() (config Config, err error) {
-	// Try to load .env file first
-	if err := loadEnvFile(".env"); err != nil {
-		return config, err
+	// First try environment variables (for GitHub Actions secrets)
+	config.DBDriver = os.Getenv("DB_DRIVER")
+	config.DBSource = os.Getenv("DB_SOURCE")
+	config.ServerAddress = os.Getenv("SERVER_ADDRESS")
+
+	// If required values are missing, try loading from .env file
+	if config.DBSource == "" {
+		if err := loadEnvFile(".env"); err != nil {
+			return config, err
+		}
+		// Read values again after loading .env
+		if config.DBDriver == "" {
+			config.DBDriver = os.Getenv("DB_DRIVER")
+		}
+		if config.DBSource == "" {
+			config.DBSource = os.Getenv("DB_SOURCE")
+		}
+		if config.ServerAddress == "" {
+			config.ServerAddress = os.Getenv("SERVER_ADDRESS")
+		}
 	}
 
-	// Set DBDriver with default value
-	config.DBDriver = os.Getenv("DB_DRIVER")
+	// Apply defaults and validate
 	if config.DBDriver == "" {
 		config.DBDriver = "postgres" // default value
 	}
 
-	// Set DBSource (required)
-	config.DBSource = os.Getenv("DB_SOURCE")
 	if config.DBSource == "" {
 		return config, fmt.Errorf("DB_SOURCE environment variable is required")
 	}
 
-	// Set ServerAddress with default value
-	config.ServerAddress = os.Getenv("SERVER_ADDRESS")
 	if config.ServerAddress == "" {
 		config.ServerAddress = ":8080" // default value
 	}
