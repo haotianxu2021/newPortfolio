@@ -67,6 +67,7 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_HOST: localhost
           DB_PORT: 5432
+          DB_SOURCE: ${{ secrets.DB_SOURCE }}
 
       - name: Run vet
         run: |
@@ -77,6 +78,7 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_HOST: localhost
           DB_PORT: 5432
+          DB_SOURCE: ${{ secrets.DB_SOURCE }}
 
   build:
     name: Build
