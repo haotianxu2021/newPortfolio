@@ -21,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot load config:", err)
 	}
-
+	log.Printf("config: %+v", config)
 	// Connect to database
 	conn, err := sql.Open(config.DBDriver, config.DBSource)
 	if err != nil {
@@ -33,7 +33,10 @@ func main() {
 	store := db.NewStore(conn)
 
 	// Create and start server
-	server := api.NewServer(store)
+	server, err := api.NewServer(store, config)
+	if err != nil {
+		log.Fatal("cannot create server:", err)
+	}
 
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)

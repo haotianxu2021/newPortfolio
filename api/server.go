@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/haotianxu2021/newPortfolio/db/sqlc"
+	"github.com/haotianxu2021/newPortfolio/util"
 )
 
 // Server serves HTTP requests for our service
@@ -13,13 +15,22 @@ type Server struct {
 	store      db.Store
 	router     *gin.Engine
 	httpServer *http.Server
+	tokenMaker util.TokenMaker
+	config     util.Config
 }
 
 // NewServer creates a new HTTP server and sets up routing
-func NewServer(store db.Store) *Server {
+func NewServer(store db.Store, config util.Config) (*Server, error) {
+	tokenMaker, err := util.NewPasetoMaker(config.TokenSymmetricKey)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create token maker: %w", err)
+	}
+
 	server := &Server{
-		store:  store,
-		router: gin.Default(),
+		store:      store,
+		router:     gin.Default(),
+		tokenMaker: tokenMaker,
+		config:     config,
 	}
 
 	// Add CORS middleware
@@ -28,7 +39,7 @@ func NewServer(store db.Store) *Server {
 	// setup routes
 	server.setupRouter()
 
-	return server
+	return server, nil
 }
 
 // ServeHTTP implements http.Handler interface
@@ -77,6 +88,7 @@ func (server *Server) setupRouter() {
 	{
 		// User routes
 		v1.POST("/users", server.createUser)
+		v1.POST("/login", server.loginUser)
 		v1.GET("/users/:id", server.getUser)
 		v1.GET("/users", server.listUsers)
 		v1.PUT("/users/:id", server.updateUser)
