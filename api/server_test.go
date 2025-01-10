@@ -9,13 +9,29 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
 	mockdb "github.com/haotianxu2021/newPortfolio/db/mock"
 	db "github.com/haotianxu2021/newPortfolio/db/sqlc"
+	"github.com/haotianxu2021/newPortfolio/util"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestServer(t *testing.T, store db.Store) *Server {
+	config := util.Config{
+		TokenSymmetricKey:   "12345678901234567890123456789012",
+		AccessTokenDuration: time.Minute,
+		DBDriver:            "postgres",
+		DBSource:            "postgresql://root:secret@localhost:5432/portfolio?sslmode=disable",
+		ServerAddress:       ":8080",
+	}
+
+	server, err := NewServer(store, config)
+	require.NoError(t, err)
+	return server
+}
 
 func TestCreatePost(t *testing.T) {
 	post := db.Post{
@@ -113,7 +129,7 @@ func TestCreatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -243,7 +259,7 @@ func TestGetPost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/api/v1/posts/%d", tc.postID)
@@ -338,7 +354,7 @@ func TestListPosts(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
 			url := "/api/v1/posts" + tc.query
@@ -446,7 +462,7 @@ func TestUpdatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -519,7 +535,7 @@ func TestDeletePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
 			var url string
