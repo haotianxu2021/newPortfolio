@@ -113,7 +113,7 @@ func TestCreatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server, _ := NewServer(store)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -243,7 +243,7 @@ func TestGetPost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server, _ := NewServer(store)
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/api/v1/posts/%d", tc.postID)
@@ -338,7 +338,7 @@ func TestListPosts(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server, _ := NewServer(store)
 			recorder := httptest.NewRecorder()
 
 			url := "/api/v1/posts" + tc.query
@@ -446,7 +446,7 @@ func TestUpdatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server, _ := NewServer(store)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -519,7 +519,7 @@ func TestDeletePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			server, _ := NewServer(store)
 			recorder := httptest.NewRecorder()
 
 			var url string
