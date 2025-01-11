@@ -142,6 +142,8 @@ func TestCreatePost(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			// 添加 GetUserByUsername 的 mock 实现
+			store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Return(db.User{}, nil).AnyTimes()
 			tc.buildStubs(store)
 
 			// Create test config
@@ -295,6 +297,8 @@ func TestGetPost(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			// 添加 GetUserByUsername 的 mock 实现
+			store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Return(db.User{}, nil).AnyTimes()
 			tc.buildStubs(store)
 
 			// Create test config
@@ -413,6 +417,8 @@ func TestListPosts(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			// 添加 GetUserByUsername 的 mock 实现
+			store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Return(db.User{}, nil).AnyTimes()
 			tc.buildStubs(store)
 
 			// Create test config
@@ -550,6 +556,8 @@ func TestUpdatePost(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			// 添加 GetUserByUsername 的 mock 实现
+			store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Return(db.User{}, nil).AnyTimes()
 			tc.buildStubs(store)
 
 			// Create test config
@@ -646,6 +654,8 @@ func TestDeletePost(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			// 添加 GetUserByUsername 的 mock 实现
+			store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Return(db.User{}, nil).AnyTimes()
 			tc.buildStubs(store)
 
 			// Create test config
