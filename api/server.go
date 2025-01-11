@@ -79,6 +79,28 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
+// authMiddleware verifies the Authorization header and sets the user in context
+func (server *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header is required"})
+			return
+		}
+
+		tokenString := authHeader[len("Bearer "):]
+		payload, err := server.tokenMaker.VerifyToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
+		}
+
+		// Store the username in context for handlers to access
+		c.Set("username", payload.Username)
+		c.Next()
+	}
+}
+
 // setupRouter sets up all the routes for our API
 func (server *Server) setupRouter() {
 	router := server.router
@@ -86,28 +108,35 @@ func (server *Server) setupRouter() {
 	// Add routes to the router
 	v1 := router.Group("/api/v1")
 	{
-		// User routes
+		// Public routes
 		v1.POST("/users", server.createUser)
 		v1.POST("/login", server.loginUser)
 		v1.GET("/users/:id", server.getUser)
 		v1.GET("/users", server.listUsers)
-		v1.PUT("/users/:id", server.updateUser)
-		v1.PUT("/users/:id/password", server.updateUserPassword)
-
-		// Post routes
-		v1.POST("/posts", server.createPost)
 		v1.GET("/posts/:id", server.getPost)
 		v1.GET("/posts", server.listPosts)
-		v1.PUT("/posts/:id", server.updatePost)
-		v1.DELETE("/posts/:id", server.deletePost)
 
-		// Post images routes
-		v1.POST("/posts/:id/images", server.addImage)
-		v1.DELETE("/images/:id", server.deleteImage)
+		// Protected routes
+		protected := v1.Group("")
+		protected.Use(server.authMiddleware())
+		{
+			// User routes
+			protected.PUT("/users/:id", server.updateUser)
+			protected.PUT("/users/:id/password", server.updateUserPassword)
 
-		// Post tags routes
-		v1.POST("/posts/:id/tags", server.addTag)
-		v1.DELETE("/tags/:id", server.deleteTag)
-		v1.DELETE("/posts/:id/tags/:tagId", server.removeTagFromPost)
+			// Post routes
+			protected.POST("/posts", server.createPost)
+			protected.PUT("/posts/:id", server.updatePost)
+			protected.DELETE("/posts/:id", server.deletePost)
+
+			// Post images routes
+			protected.POST("/posts/:id/images", server.addImage)
+			protected.DELETE("/images/:id", server.deleteImage)
+
+			// Post tags routes
+			protected.POST("/posts/:id/tags", server.addTag)
+			protected.DELETE("/tags/:id", server.deleteTag)
+			protected.DELETE("/posts/:id/tags/:tagId", server.removeTagFromPost)
+		}
 	}
 }

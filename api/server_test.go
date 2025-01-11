@@ -261,18 +261,6 @@ func TestGetPost(t *testing.T) {
 			},
 		},
 		{
-			name:   "UnauthorizedError",
-			postID: post.ID,
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetPost(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-		{
 			name:   "InternalError",
 			postID: post.ID,
 			buildStubs: func(store *mockdb.MockStore) {
@@ -376,18 +364,6 @@ func TestListPosts(t *testing.T) {
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 				requireBodyMatchPosts(t, recorder.Body, posts)
-			},
-		},
-		{
-			name:  "UnauthorizedError",
-			query: "?limit=5&offset=0",
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					ListPosts(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 		{
