@@ -10,12 +10,25 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
 	mockdb "github.com/haotianxu2021/newPortfolio/db/mock"
 	db "github.com/haotianxu2021/newPortfolio/db/sqlc"
+	"github.com/haotianxu2021/newPortfolio/util"
 	"github.com/stretchr/testify/require"
 )
+
+func createTestToken(t *testing.T, server *Server, username string) string {
+	token, err := server.tokenMaker.CreateToken(username, 24*time.Hour)
+	require.NoError(t, err)
+	return token
+}
+
+func addAuthHeader(request *http.Request, token string) {
+	request.Header.Set("Authorization", "Bearer "+token)
+}
 
 func TestCreatePost(t *testing.T) {
 	post := db.Post{
@@ -83,6 +96,24 @@ func TestCreatePost(t *testing.T) {
 			},
 		},
 		{
+			name: "UnauthorizedError",
+			body: gin.H{
+				"title":   post.Title,
+				"content": post.Content,
+				"user_id": post.UserID.Int32,
+				"type":    post.Type,
+				"status":  post.Status.String,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					CreatePost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name: "InternalError",
 			body: gin.H{
 				"title":   post.Title,
@@ -113,7 +144,13 @@ func TestCreatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server, _ := NewServer(store)
+			// Create test config
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -122,6 +159,11 @@ func TestCreatePost(t *testing.T) {
 			url := "/api/v1/posts"
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
+
+			if tc.name != "UnauthorizedError" {
+				token := createTestToken(t, server, "test_user")
+				addAuthHeader(request, token)
+			}
 
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
@@ -219,6 +261,18 @@ func TestGetPost(t *testing.T) {
 			},
 		},
 		{
+			name:   "UnauthorizedError",
+			postID: post.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name:   "InternalError",
 			postID: post.ID,
 			buildStubs: func(store *mockdb.MockStore) {
@@ -243,12 +297,23 @@ func TestGetPost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server, _ := NewServer(store)
+			// Create test config
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/api/v1/posts/%d", tc.postID)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
+
+			if tc.name != "UnauthorizedError" {
+				token := createTestToken(t, server, "test_user")
+				addAuthHeader(request, token)
+			}
 
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
@@ -314,6 +379,18 @@ func TestListPosts(t *testing.T) {
 			},
 		},
 		{
+			name:  "UnauthorizedError",
+			query: "?limit=5&offset=0",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					ListPosts(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name:  "InternalError",
 			query: "?limit=5&offset=0",
 			buildStubs: func(store *mockdb.MockStore) {
@@ -338,12 +415,23 @@ func TestListPosts(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server, _ := NewServer(store)
+			// Create test config
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 
 			url := "/api/v1/posts" + tc.query
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
+
+			if tc.name != "UnauthorizedError" {
+				token := createTestToken(t, server, "test_user")
+				addAuthHeader(request, token)
+			}
 
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
@@ -416,6 +504,24 @@ func TestUpdatePost(t *testing.T) {
 			},
 		},
 		{
+			name:   "UnauthorizedError",
+			postID: post.ID,
+			body: gin.H{
+				"title":   post.Title,
+				"content": post.Content,
+				"type":    post.Type,
+				"status":  post.Status.String,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					UpdatePost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name:   "NotFound",
 			postID: post.ID,
 			body: gin.H{
@@ -446,7 +552,13 @@ func TestUpdatePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server, _ := NewServer(store)
+			// Create test config
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -455,6 +567,11 @@ func TestUpdatePost(t *testing.T) {
 			url := fmt.Sprintf("/api/v1/posts/%d", tc.postID)
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
 			require.NoError(t, err)
+
+			if tc.name != "UnauthorizedError" {
+				token := createTestToken(t, server, "test_user")
+				addAuthHeader(request, token)
+			}
 
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
@@ -495,6 +612,18 @@ func TestDeletePost(t *testing.T) {
 			},
 		},
 		{
+			name:   "UnauthorizedError",
+			postID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					DeletePost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name:   "InternalError",
 			postID: 1,
 			buildStubs: func(store *mockdb.MockStore) {
@@ -519,7 +648,13 @@ func TestDeletePost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server, _ := NewServer(store)
+			// Create test config
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
 			recorder := httptest.NewRecorder()
 
 			var url string
@@ -530,6 +665,11 @@ func TestDeletePost(t *testing.T) {
 			}
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
+
+			if tc.name != "UnauthorizedError" {
+				token := createTestToken(t, server, "test_user")
+				addAuthHeader(request, token)
+			}
 
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
