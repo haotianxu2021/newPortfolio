@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTestToken(t *testing.T, maker token.TokenMaker, username string) string {
+func createTestToken(t *testing.T, maker util.TokenMaker, username string) string {
 	token, err := maker.CreateToken(username, 24*time.Hour)
 	require.NoError(t, err)
 	return token
@@ -50,7 +50,7 @@ func TestCreatePost(t *testing.T) {
 		name          string
 		body          gin.H
 		buildStubs    func(store *mockdb.MockStore)
-		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -79,7 +79,7 @@ func TestCreatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
 				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
@@ -106,7 +106,7 @@ func TestCreatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
 				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
@@ -153,7 +153,7 @@ func TestCreatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
 				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
@@ -481,7 +481,7 @@ func TestUpdatePost(t *testing.T) {
 		postID        int32
 		body          gin.H
 		buildStubs    func(store *mockdb.MockStore)
-		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -510,7 +510,7 @@ func TestUpdatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
 				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
@@ -559,7 +559,7 @@ func TestUpdatePost(t *testing.T) {
 					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
 				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
@@ -612,7 +612,7 @@ func TestDeletePost(t *testing.T) {
 		name          string
 		postID        int32
 		buildStubs    func(store *mockdb.MockStore)
-		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.TokenMaker)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
