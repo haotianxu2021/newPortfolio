@@ -215,10 +215,8 @@ func TestCreatePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				// Create token for the post owner (user_id 1)
-				token := createTestToken(t, tokenMaker, "testuser1")
-				addAuthHeader(request, token)
+			if tc.setupAuth != nil {
+				tc.setupAuth(t, request, server.tokenMaker)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -354,9 +352,8 @@ func TestGetPost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, tokenMaker, "testuser1")
-				addAuthHeader(request, token)
+			if tc.setupAuth != nil {
+				tc.setupAuth(t, request, server.tokenMaker)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -460,9 +457,8 @@ func TestListPosts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, tokenMaker, "testuser1")
-				addAuthHeader(request, token)
+			if tc.setupAuth != nil {
+				tc.setupAuth(t, request, server.tokenMaker)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -621,9 +617,8 @@ func TestUpdatePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, tokenMaker, "testuser1")
-				addAuthHeader(request, token)
+			if tc.setupAuth != nil {
+				tc.setupAuth(t, request, server.tokenMaker)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -720,9 +715,8 @@ func TestDeletePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, tokenMaker, "testuser1")
-				addAuthHeader(request, token)
+			if tc.setupAuth != nil {
+				tc.setupAuth(t, request, server.tokenMaker)
 			}
 
 			server.router.ServeHTTP(recorder, request)
