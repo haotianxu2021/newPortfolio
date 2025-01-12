@@ -81,11 +81,14 @@ func TestCreatePost(t *testing.T) {
 				}
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+				store.EXPECT().
 					CreatePost(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -104,10 +107,12 @@ func TestCreatePost(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
 					CreatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -146,11 +151,14 @@ func TestCreatePost(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+				store.EXPECT().
 					CreatePost(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Post{}, sql.ErrConnDone)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -499,6 +507,8 @@ func TestUpdatePost(t *testing.T) {
 				store.EXPECT().
 					GetPost(gomock.Any(), gomock.Eq(post.ID)).
 					Times(1).
+					Return(post, nil)
+				store.EXPECT().
 					UpdatePost(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
 					Return(post, nil)
@@ -524,6 +534,8 @@ func TestUpdatePost(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetPost(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
 					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
@@ -543,9 +555,11 @@ func TestUpdatePost(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetPost(gomock.Any(), gomock.Eq(post.ID)).
-					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Post{}, sql.ErrNoRows)
+				store.EXPECT().
+					UpdatePost(gomock.Any(), gomock.Any()).
+					Times(0)
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				token := createTestToken(t, server, "testuser1")
