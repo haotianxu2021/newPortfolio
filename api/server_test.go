@@ -45,6 +45,16 @@ func TestCreatePost(t *testing.T) {
 			Valid:  true,
 		},
 	}
+	test_uesr := db.User{
+		ID:       1,
+		Username: "testuser1",
+		Email:    "testuser1@example.com",
+		Password: "testpassword",
+		CreatedAt: sql.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		},
+	}
 
 	testCases := []struct {
 		name          string
@@ -70,9 +80,14 @@ func TestCreatePost(t *testing.T) {
 					Status:  post.Status,
 				}
 				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
 					CreatePost(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
 					Return(post, nil)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				token := createTestToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -88,8 +103,13 @@ func TestCreatePost(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
 					CreatePost(gomock.Any(), gomock.Any()).
 					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				token := createTestToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -106,6 +126,7 @@ func TestCreatePost(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
 					CreatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
@@ -124,9 +145,14 @@ func TestCreatePost(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
 					CreatePost(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Post{}, sql.ErrConnDone)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				token := createTestToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -161,7 +187,8 @@ func TestCreatePost(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, server, "test_user")
+				// Create token for the post owner (user_id 1)
+				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -470,9 +497,15 @@ func TestUpdatePost(t *testing.T) {
 					Status:  post.Status,
 				}
 				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(post.ID)).
+					Times(1).
 					UpdatePost(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
 					Return(post, nil)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				token := createTestToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -490,6 +523,7 @@ func TestUpdatePost(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Any()).
 					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
@@ -508,9 +542,14 @@ func TestUpdatePost(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(post.ID)).
 					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Post{}, sql.ErrNoRows)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				token := createTestToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
