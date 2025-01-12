@@ -60,6 +60,7 @@ func TestCreatePost(t *testing.T) {
 		name          string
 		body          gin.H
 		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -88,7 +89,7 @@ func TestCreatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -107,12 +108,14 @@ func TestCreatePost(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
-					Times(0)
+					Times(1).
+					Return(db.User{ID: 1}, nil)
 				store.EXPECT().
-					CreatePost(gomock.Any(), gomock.Any()).
-					Times(0)
+					CreatePost(gomock.Any(), gomock.Eq(arg)).
+					Times(1).
+					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -154,11 +157,11 @@ func TestCreatePost(t *testing.T) {
 					Times(1).
 					Return(db.User{ID: 1}, nil)
 				store.EXPECT().
-					CreatePost(gomock.Any(), gomock.Any()).
+					CreatePost(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
-					Return(db.Post{}, sql.ErrConnDone)
+					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -485,6 +488,7 @@ func TestUpdatePost(t *testing.T) {
 		postID        int32
 		body          gin.H
 		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -513,7 +517,7 @@ func TestUpdatePost(t *testing.T) {
 					Times(1).
 					Return(post, nil)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -561,7 +565,7 @@ func TestUpdatePost(t *testing.T) {
 					UpdatePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+			setupAuth: func(t *testing.T, request *http.Request) {
 				token := createTestToken(t, server, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -613,6 +617,7 @@ func TestDeletePost(t *testing.T) {
 		name          string
 		postID        int32
 		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
