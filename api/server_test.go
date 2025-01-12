@@ -223,7 +223,7 @@ func TestCreatePost(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestTokenToken(t, server, "testuser1")
+				token := createTestTokenSever(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -362,7 +362,7 @@ func TestGetPost(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestTokenToken(t, server, "testuser1")
+				token := createTestTokenSever(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -469,7 +469,7 @@ func TestListPosts(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestTokenToken(t, server, "testuser1")
+				token := createTestTokenSever(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -631,7 +631,7 @@ func TestUpdatePost(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestTokenToken(t, server, "testuser1")
+				token := createTestTokenSever(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -731,7 +731,7 @@ func TestDeletePost(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestTokenToken(t, server, "testuser1")
+				token := createTestTokenSever(t, server, "testuser1")
 				addAuthHeader(request, token)
 			}
 
