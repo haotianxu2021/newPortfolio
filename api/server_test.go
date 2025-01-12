@@ -26,6 +26,12 @@ func createTestToken(t *testing.T, maker util.TokenMaker, username string) strin
 	return token
 }
 
+func createTestTokenSever(t *testing.T, server *Server, username string) string {
+	token, err := server.tokenMaker.CreateToken(username, 24*time.Hour)
+	require.NoError(t, err)
+	return token
+}
+
 func addAuthHeader(request *http.Request, token string) {
 	request.Header.Set("Authorization", "Bearer "+token)
 }
@@ -215,8 +221,10 @@ func TestCreatePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
 
-			if tc.setupAuth != nil {
-				tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name != "UnauthorizedError" {
+				// Create token for the post owner (user_id 1)
+				token := createTestTokenToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -352,8 +360,10 @@ func TestGetPost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			if tc.setupAuth != nil {
-				tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name != "UnauthorizedError" {
+				// Create token for the post owner (user_id 1)
+				token := createTestTokenToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -457,8 +467,10 @@ func TestListPosts(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
-			if tc.setupAuth != nil {
-				tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name != "UnauthorizedError" {
+				// Create token for the post owner (user_id 1)
+				token := createTestTokenToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -617,8 +629,10 @@ func TestUpdatePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
 			require.NoError(t, err)
 
-			if tc.setupAuth != nil {
-				tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name != "UnauthorizedError" {
+				// Create token for the post owner (user_id 1)
+				token := createTestTokenToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -715,8 +729,10 @@ func TestDeletePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
-			if tc.setupAuth != nil {
-				tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name != "UnauthorizedError" {
+				// Create token for the post owner (user_id 1)
+				token := createTestTokenToken(t, server, "testuser1")
+				addAuthHeader(request, token)
 			}
 
 			server.router.ServeHTTP(recorder, request)
