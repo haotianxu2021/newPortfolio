@@ -103,10 +103,15 @@ func TestCreatePost(t *testing.T) {
 				"type":    post.Type,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				// We need to expect the authentication check since it happens before validation
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
 
+				// No CreatePost expectation since validation should fail
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
-				// Use tokenMaker directly instead of server
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			},
@@ -494,8 +499,31 @@ func TestUpdatePost(t *testing.T) {
 				"status":  post.Status.String,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				// Convert post to GetPostRow for the first call
+				// First, expect the authentication check
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				// Then expect the post retrieval
 				getPostRow := db.GetPostRow{
+					ID:      post.ID,
+					Title:   post.Title,
+					Content: post.Content,
+					Type:    post.Type,
+					Status:  post.Status,
+					UserID: sql.NullInt32{
+						Int32: 1,
+						Valid: true,
+					},
+				}
+
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(post.ID)).
+					Times(1).
+					Return(getPostRow, nil)
+
+				updateArg := db.UpdatePostParams{
 					ID:      post.ID,
 					Title:   post.Title,
 					Content: post.Content,
@@ -504,16 +532,12 @@ func TestUpdatePost(t *testing.T) {
 				}
 
 				store.EXPECT().
-					GetPost(gomock.Any(), gomock.Eq(post.ID)).
-					Times(1).
-					Return(getPostRow, nil)
-
-				store.EXPECT().
-					UpdatePost(gomock.Any(), gomock.Any()).
+					UpdatePost(gomock.Any(), gomock.Eq(updateArg)).
 					Times(1).
 					Return(post, nil)
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				// Use the same username that matches the mocked user
 				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			},
