@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/haotianxu2021/newPortfolio/db/sqlc"
+	"github.com/haotianxu2021/newPortfolio/util"
 )
 
 type createPostRequest struct {
@@ -46,9 +47,28 @@ type postResponse struct {
 }
 
 func (server *Server) createPost(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
+	// Get authenticated user
+	user, err := server.store.GetUserByUsername(ctx, authPayload.Username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify request userID matches authenticated user
 	var req createPostRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.UserID != int32(user.ID) {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only create posts for yourself"})
 		return
 	}
 
@@ -85,10 +105,30 @@ func (server *Server) createPost(ctx *gin.Context) {
 }
 
 func (server *Server) updatePost(ctx *gin.Context) {
+	// Get auth payload
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	// Verify post exists and belongs to user
+	post, err := server.store.GetPost(ctx, int32(id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify ownership
+	if post.Username.String != authPayload.Username {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only update your own posts"})
 		return
 	}
 
@@ -109,17 +149,13 @@ func (server *Server) updatePost(ctx *gin.Context) {
 		},
 	}
 
-	post, err := server.store.UpdatePost(ctx, arg)
+	updatedPost, err := server.store.UpdatePost(ctx, arg)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, post)
+	ctx.JSON(http.StatusOK, updatedPost)
 }
 
 func (server *Server) getPost(ctx *gin.Context) {

@@ -135,6 +135,47 @@ func (server *Server) updateUser(ctx *gin.Context) {
 		return
 	}
 
+	authPayload, err := server.getAuthPayload(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get current user data to verify ownership
+	currentUser, err := server.store.GetUser(ctx, int32(id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify user is updating their own profile
+	if authPayload.Username != currentUser.Username {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "can only update your own profile"})
+		return
+	}
+
+	// Check if new username already exists (if changed)
+	if req.Username != "" && req.Username != currentUser.Username {
+		_, err := server.store.GetUserByUsername(ctx, req.Username)
+		if err == nil {
+			ctx.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+			return
+		}
+	}
+
+	// Check if new email already exists (if changed)
+	if req.Email != "" && req.Email != currentUser.Email {
+		_, err := server.store.GetUserByEmail(ctx, req.Email)
+		if err == nil {
+			ctx.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+			return
+		}
+	}
+
 	arg := db.UpdateUserParams{
 		ID:       int32(id),
 		Username: req.Username,
@@ -176,10 +217,32 @@ func (server *Server) updateUser(ctx *gin.Context) {
 }
 
 func (server *Server) updateUserPassword(ctx *gin.Context) {
+	authPayload, err := server.getAuthPayload(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	// Verify user is updating their own password
+	user, err := server.store.GetUser(ctx, int32(id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if authPayload.Username != user.Username {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "can only update your own password"})
 		return
 	}
 
@@ -199,8 +262,8 @@ func (server *Server) updateUserPassword(ctx *gin.Context) {
 		ID:           int32(id),
 		PasswordHash: passwordHash,
 	}
-
-	user, err := server.store.UpdateUserPassword(ctx, arg)
+	ret := db.UpdateUserPasswordRow{}
+	ret, err = server.store.UpdateUserPassword(ctx, arg)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -211,10 +274,10 @@ func (server *Server) updateUserPassword(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"id":         user.ID,
-		"email":      user.Email,
-		"username":   user.Username,
-		"updated_at": user.UpdatedAt,
+		"id":         ret.ID,
+		"email":      ret.Email,
+		"username":   ret.Username,
+		"updated_at": ret.UpdatedAt,
 	})
 }
 

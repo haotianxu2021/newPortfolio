@@ -10,6 +10,22 @@ import (
 	"github.com/haotianxu2021/newPortfolio/util"
 )
 
+const authorizationPayloadKey = "authorization_payload"
+
+func (server *Server) getAuthPayload(ctx *gin.Context) (*util.Payload, error) {
+	payload, exists := ctx.Get(authorizationPayloadKey)
+	if !exists {
+		return nil, fmt.Errorf("authorization payload not found in context")
+	}
+
+	authPayload, ok := payload.(*util.Payload)
+	if !ok {
+		return nil, fmt.Errorf("invalid authorization payload type")
+	}
+
+	return authPayload, nil
+}
+
 // Server serves HTTP requests for our service
 type Server struct {
 	store      db.Store
@@ -95,7 +111,9 @@ func (server *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Store the username in context for handlers to access
+		// Store the full payload in context for handlers to access
+		c.Set(authorizationPayloadKey, payload)
+		// Also store username for backward compatibility
 		c.Set("username", payload.Username)
 		c.Next()
 	}
