@@ -97,6 +97,13 @@ func TestCreatePost(t *testing.T) {
 				"type":    post.Type,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				arg := db.CreatePostParams{
+					Title:   post.Title,
+					Content: post.Content,
+					UserID:  post.UserID,
+					Type:    post.Type,
+					Status:  post.Status,
+				}
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -125,10 +132,21 @@ func TestCreatePost(t *testing.T) {
 				"status":  post.Status.String,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				arg := db.CreatePostParams{
+					Title:   post.Title,
+					Content: post.Content,
+					UserID:  post.UserID,
+					Type:    post.Type,
+					Status:  post.Status,
+				}
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
-					CreatePost(gomock.Any(), gomock.Any()).
-					Times(0)
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+				store.EXPECT().
+					CreatePost(gomock.Any(), gomock.Eq(arg)).
+					Times(1).
+					Return(post, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
@@ -144,6 +162,13 @@ func TestCreatePost(t *testing.T) {
 				"status":  post.Status.String,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				arg := db.CreatePostParams{
+					Title:   post.Title,
+					Content: post.Content,
+					UserID:  post.UserID,
+					Type:    post.Type,
+					Status:  post.Status,
+				}
 				store.EXPECT().
 					GetUserByUsername(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -192,7 +217,7 @@ func TestCreatePost(t *testing.T) {
 
 			if tc.name != "UnauthorizedError" {
 				// Create token for the post owner (user_id 1)
-				token := createTestToken(t, server, "testuser1")
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -330,7 +355,7 @@ func TestGetPost(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, server, "test_user")
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -436,7 +461,7 @@ func TestListPosts(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, server, "test_user")
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -597,7 +622,7 @@ func TestUpdatePost(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, server, "test_user")
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			}
 
@@ -696,7 +721,7 @@ func TestDeletePost(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.name != "UnauthorizedError" {
-				token := createTestToken(t, server, "test_user")
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
 			}
 
