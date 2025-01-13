@@ -551,3 +551,18 @@ func (mr *MockStoreMockRecorder) UploadPostImageTx(arg0, arg1 interface{}) *gomo
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UploadPostImageTx", reflect.TypeOf((*MockStore)(nil).UploadPostImageTx), arg0, arg1)
 }
+
+// GetPostsByTagID mocks base method.
+func (m *MockStore) GetPostsByTagID(arg0 context.Context, arg1 int32) ([]db.GetPostsByTagIDRow, error) {
+    m.ctrl.T.Helper()
+    ret := m.ctrl.Call(m, "GetPostsByTagID", arg0, arg1)
+    ret0, _ := ret[0].([]db.GetPostsByTagIDRow)
+    ret1, _ := ret[1].(error)
+    return ret0, ret1
+}
+
+// GetPostsByTagID indicates an expected call of GetPostsByTagID.
+func (mr *MockStoreMockRecorder) GetPostsByTagID(arg0, arg1 interface{}) *gomock.Call {
+    mr.mock.ctrl.T.Helper()
+    return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByTagID", reflect.TypeOf((*MockStore)(nil).GetPostsByTagID), arg0, arg1)
+}
