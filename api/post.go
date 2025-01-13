@@ -249,10 +249,30 @@ func (server *Server) listPosts(ctx *gin.Context) {
 }
 
 func (server *Server) deletePost(ctx *gin.Context) {
+	// Get auth payload
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	// Verify post exists and belongs to user
+	post, err := server.store.GetPost(ctx, int32(id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify ownership
+	if post.Username.String != authPayload.Username {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only delete your own posts"})
 		return
 	}
 
@@ -316,10 +336,37 @@ func (server *Server) addImage(ctx *gin.Context) {
 }
 
 func (server *Server) deleteImage(ctx *gin.Context) {
+	// Get auth payload
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid image id"})
+		return
+	}
+
+	// Get the image to verify ownership
+	image, err := server.store.GetImage(ctx, int32(id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "image not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get user by username
+	user, err := server.store.GetUserByUsername(ctx, authPayload.Username)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify ownership
+	if image.UserID.Int32 != user.ID {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only delete your own images"})
 		return
 	}
 
@@ -367,10 +414,45 @@ func (server *Server) addTag(ctx *gin.Context) {
 }
 
 func (server *Server) deleteTag(ctx *gin.Context) {
+	// Get auth payload
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag id"})
+		return
+	}
+
+	// Get user by username
+	user, err := server.store.GetUserByUsername(ctx, authPayload.Username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get all posts that use this tag
+	posts, err := server.store.GetPostsByTagID(ctx, int32(id))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if user owns any posts with this tag
+	hasAccess := false
+	for _, post := range posts {
+		if post.UserID.Int32 == user.ID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only delete tags used in your own posts"})
 		return
 	}
 
@@ -392,10 +474,30 @@ func (server *Server) deleteTag(ctx *gin.Context) {
 }
 
 func (server *Server) removeTagFromPost(ctx *gin.Context) {
+	// Get auth payload
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*util.Payload)
+
 	postIDStr := ctx.Param("id")
 	postID, err := strconv.ParseInt(postIDStr, 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id"})
+		return
+	}
+
+	// Verify post exists and belongs to user
+	post, err := server.store.GetPost(ctx, int32(postID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify ownership
+	if post.Username.String != authPayload.Username {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "you can only modify your own posts"})
 		return
 	}
 

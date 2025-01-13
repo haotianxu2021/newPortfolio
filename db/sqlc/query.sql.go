@@ -381,6 +381,67 @@ func (q *Queries) GetPostTag(ctx context.Context, arg GetPostTagParams) (PostTag
 	return i, err
 }
 
+const getPostsByTagID = `-- name: GetPostsByTagID :many
+SELECT 
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at,
+  u.username,
+  u.first_name,
+  u.last_name
+FROM posts p
+JOIN post_tags pt ON p.id = pt.post_id
+JOIN users u ON p.user_id = u.id
+WHERE pt.tag_id = $1
+`
+
+type GetPostsByTagIDRow struct {
+	ID        int32          `json:"id"`
+	UserID    sql.NullInt32  `json:"user_id"`
+	Title     string         `json:"title"`
+	Content   string         `json:"content"`
+	Type      string         `json:"type"`
+	Status    sql.NullString `json:"status"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+	UpdatedAt sql.NullTime   `json:"updated_at"`
+	Username  string         `json:"username"`
+	FirstName sql.NullString `json:"first_name"`
+	LastName  sql.NullString `json:"last_name"`
+}
+
+func (q *Queries) GetPostsByTagID(ctx context.Context, tagID int32) ([]GetPostsByTagIDRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsByTagID, tagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPostsByTagIDRow{}
+	for rows.Next() {
+		var i GetPostsByTagIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Content,
+			&i.Type,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTag = `-- name: GetTag :one
 SELECT id, name FROM tags WHERE id = $1 LIMIT 1
 `

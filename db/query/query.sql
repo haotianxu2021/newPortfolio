@@ -209,3 +209,14 @@ WHERE post_id = $1 AND tag_id = $2 LIMIT 1;
 -- name: DeleteTagFromPosts :exec
 DELETE FROM post_tags 
 WHERE tag_id = $1;
+
+-- name: GetPostsByTagID :many
+SELECT 
+  p.*,
+  u.username,
+  u.first_name,
+  u.last_name
+FROM posts p
+JOIN post_tags pt ON p.id = pt.post_id
+JOIN users u ON p.user_id = u.id
+WHERE pt.tag_id = $1;

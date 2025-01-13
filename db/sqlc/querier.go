@@ -27,6 +27,7 @@ type Querier interface {
 	GetImage(ctx context.Context, id int32) (Image, error)
 	GetPost(ctx context.Context, id int32) (GetPostRow, error)
 	GetPostTag(ctx context.Context, arg GetPostTagParams) (PostTag, error)
+	GetPostsByTagID(ctx context.Context, tagID int32) ([]GetPostsByTagIDRow, error)
 	GetTag(ctx context.Context, id int32) (Tag, error)
 	GetUser(ctx context.Context, id int32) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
