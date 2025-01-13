@@ -985,7 +985,7 @@ func TestDeleteTag(t *testing.T) {
 				store.EXPECT().
 					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
 					Times(1).
-					Return([]db.Post{
+					Return([]db.GetPostsByTagIDRow{
 						{
 							ID: 1,
 							UserID: sql.NullInt32{
@@ -1027,7 +1027,7 @@ func TestDeleteTag(t *testing.T) {
 				store.EXPECT().
 					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
 					Times(1).
-					Return([]db.Post{}, nil)
+					Return([]db.GetPostsByTagIDRow{}, nil)
 
 				// No further operations should be called
 				store.EXPECT().
@@ -1057,7 +1057,7 @@ func TestDeleteTag(t *testing.T) {
 				store.EXPECT().
 					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
 					Times(1).
-					Return([]db.Post{
+					Return([]db.GetPostsByTagIDRow{
 						{
 							ID: 1,
 							UserID: sql.NullInt32{
