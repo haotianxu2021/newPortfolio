@@ -18,6 +18,7 @@ type Querier interface {
 	CreatePostTag(ctx context.Context, arg CreatePostTagParams) (PostTag, error)
 	CreateTag(ctx context.Context, name string) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DecrementPostLikes(ctx context.Context, id int32) (Post, error)
 	DeleteImage(ctx context.Context, id int32) error
 	DeletePost(ctx context.Context, id int32) error
 	DeletePostTag(ctx context.Context, arg DeletePostTagParams) error
@@ -32,12 +33,16 @@ type Querier interface {
 	GetUser(ctx context.Context, id int32) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	IncrementPostLikes(ctx context.Context, id int32) (Post, error)
 	ListPostComments(ctx context.Context, postID sql.NullInt32) ([]ListPostCommentsRow, error)
 	ListPostTags(ctx context.Context, postID int32) ([]Tag, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
+	ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error)
+	ListPostsOrderByLikes(ctx context.Context, arg ListPostsOrderByLikesParams) ([]ListPostsOrderByLikesRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListUserImages(ctx context.Context, arg ListUserImagesParams) ([]Image, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
+	ListUsersOrderByPostLikes(ctx context.Context, arg ListUsersOrderByPostLikesParams) ([]ListUsersOrderByPostLikesRow, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (UpdateUserPasswordRow, error)

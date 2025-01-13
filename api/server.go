@@ -133,7 +133,10 @@ func (server *Server) setupRouter() {
 		v1.GET("/users", server.listUsers)
 		v1.GET("/posts/:id", server.getPost)
 		v1.GET("/posts", server.listPosts)
-
+		v1.GET("/posts/filter", server.FilterPosts)
+		v1.GET("/users/:id/posts", server.listPostsByUser)
+		v1.GET("/posts/by-likes", server.listPostsByLikes)
+		v1.GET("/users/by-likes", server.listUsersByPostLikes)
 		// Protected routes
 		protected := v1.Group("")
 		protected.Use(server.authMiddleware())
@@ -155,6 +158,9 @@ func (server *Server) setupRouter() {
 			protected.POST("/posts/:id/tags", server.addTag)
 			protected.DELETE("/tags/:id", server.deleteTag)
 			protected.DELETE("/posts/:id/tags/:tagId", server.removeTagFromPost)
+
+			protected.POST("/posts/:id/like", server.incrementPostLikes)
+			protected.POST("/posts/:id/unlike", server.decrementPostLikes)
 		}
 	}
 }

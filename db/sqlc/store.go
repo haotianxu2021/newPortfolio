@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type Store interface {
@@ -15,6 +16,7 @@ type Store interface {
 	UpdatePostTx(ctx context.Context, arg UpdatePostTxParams) (UpdatePostTxResult, error)
 	AddPostTagTx(ctx context.Context, arg PostTagTxParams) (PostTag, error)
 	BatchAddPostTagsTx(ctx context.Context, arg BatchAddPostTagsParams) ([]PostTag, error)
+	FilterPosts(ctx context.Context, filter FilterParams) ([]FilteredPost, error)
 }
 
 type SQLStore struct {
@@ -335,4 +337,105 @@ func (store *SQLStore) UpdatePostTagsTx(ctx context.Context, arg UpdatePostTagsP
 
 		return nil
 	})
+}
+
+type FilterParams struct {
+	UserID    *int32
+	Status    *string
+	SortBy    string
+	SortOrder string
+	Limit     int32
+	Offset    int32
+}
+type FilteredPost struct {
+	ID           int32          `json:"id"`
+	UserID       sql.NullInt32  `json:"user_id"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	Type         string         `json:"type"`
+	Status       sql.NullString `json:"status"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	UpdatedAt    sql.NullTime   `json:"updated_at"`
+	Likes        int32          `json:"likes"`
+	Username     sql.NullString `json:"username"`
+	CommentCount int64          `json:"comment_count"`
+	Tags         interface{}    `json:"tags"`
+}
+
+// Implementation of FilterPosts for SQLStore
+func (store *SQLStore) FilterPosts(ctx context.Context, filter FilterParams) ([]FilteredPost, error) {
+	query := buildFilterQuery(filter)
+	rows, err := store.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []FilteredPost
+	for rows.Next() {
+		var post FilteredPost
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.Title,
+			&post.Content,
+			&post.Type,
+			&post.Status,
+			&post.CreatedAt,
+			&post.UpdatedAt,
+			&post.Likes,
+			&post.Username,
+			&post.CommentCount,
+			&post.Tags,
+		)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+
+	return posts, rows.Err()
+}
+
+func buildFilterQuery(filter FilterParams) string {
+	baseQuery := `
+        SELECT 
+            p.id, p.user_id, p.title, p.content, p.type, p.status, 
+            p.created_at, p.updated_at, p.likes,
+            u.username,
+            COUNT(DISTINCT c.id) as comment_count,
+            COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
+        FROM posts p
+        LEFT JOIN users u ON p.user_id = u.id
+        LEFT JOIN comments c ON p.id = c.post_id
+        LEFT JOIN post_tags pt ON p.id = pt.post_id
+        LEFT JOIN tags t ON pt.tag_id = t.id
+        WHERE 1=1
+    `
+
+	// Add filters
+	if filter.UserID != nil {
+		baseQuery += fmt.Sprintf(" AND p.user_id = %d", *filter.UserID)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		baseQuery += fmt.Sprintf(" AND p.status = '%s'", *filter.Status)
+	}
+
+	// Add group by
+	baseQuery += " GROUP BY p.id, u.id"
+
+	// Add sorting
+	sortField := "p.created_at"
+	switch filter.SortBy {
+	case "likes":
+		sortField = "p.likes"
+	case "title":
+		sortField = "p.title"
+	}
+	baseQuery += fmt.Sprintf(" ORDER BY %s %s", sortField, strings.ToUpper(filter.SortOrder))
+
+	// Add pagination
+	baseQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", filter.Limit, filter.Offset)
+
+	return baseQuery
 }

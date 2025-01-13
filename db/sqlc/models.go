@@ -33,6 +33,7 @@ type Post struct {
 	Status    sql.NullString `json:"status"`
 	CreatedAt sql.NullTime   `json:"created_at"`
 	UpdatedAt sql.NullTime   `json:"updated_at"`
+	Likes     int32          `json:"likes"`
 }
 
 type PostImage struct {

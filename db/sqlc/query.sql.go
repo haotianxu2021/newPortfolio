@@ -115,7 +115,7 @@ INSERT INTO posts (
   status
 ) VALUES (
   $1, $2, $3, $4, $5
-) RETURNING id, user_id, title, content, type, status, created_at, updated_at
+) RETURNING id, user_id, title, content, type, status, created_at, updated_at, likes
 `
 
 type CreatePostParams struct {
@@ -144,6 +144,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Likes,
 	)
 	return i, err
 }
@@ -230,6 +231,30 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const decrementPostLikes = `-- name: DecrementPostLikes :one
+UPDATE posts
+SET likes = GREATEST(likes - 1, 0)
+WHERE id = $1
+RETURNING id, user_id, title, content, type, status, created_at, updated_at, likes
+`
+
+func (q *Queries) DecrementPostLikes(ctx context.Context, id int32) (Post, error) {
+	row := q.db.QueryRowContext(ctx, decrementPostLikes, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Content,
+		&i.Type,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Likes,
+	)
+	return i, err
+}
+
 const deleteImage = `-- name: DeleteImage :exec
 DELETE FROM images WHERE id = $1
 `
@@ -311,12 +336,13 @@ func (q *Queries) GetImage(ctx context.Context, id int32) (Image, error) {
 
 const getPost = `-- name: GetPost :one
 SELECT 
-  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at,
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
   u.username,
   u.first_name,
   u.last_name,
   array_agg(DISTINCT t.name) as tags,
-  array_agg(DISTINCT i.file_path) as images
+  array_agg(DISTINCT i.file_path) as images,
+  p.likes
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -336,11 +362,13 @@ type GetPostRow struct {
 	Status    sql.NullString `json:"status"`
 	CreatedAt sql.NullTime   `json:"created_at"`
 	UpdatedAt sql.NullTime   `json:"updated_at"`
+	Likes     int32          `json:"likes"`
 	Username  sql.NullString `json:"username"`
 	FirstName sql.NullString `json:"first_name"`
 	LastName  sql.NullString `json:"last_name"`
 	Tags      interface{}    `json:"tags"`
 	Images    interface{}    `json:"images"`
+	Likes_2   int32          `json:"likes_2"`
 }
 
 func (q *Queries) GetPost(ctx context.Context, id int32) (GetPostRow, error) {
@@ -355,11 +383,13 @@ func (q *Queries) GetPost(ctx context.Context, id int32) (GetPostRow, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Likes,
 		&i.Username,
 		&i.FirstName,
 		&i.LastName,
 		&i.Tags,
 		&i.Images,
+		&i.Likes_2,
 	)
 	return i, err
 }
@@ -383,7 +413,7 @@ func (q *Queries) GetPostTag(ctx context.Context, arg GetPostTagParams) (PostTag
 
 const getPostsByTagID = `-- name: GetPostsByTagID :many
 SELECT 
-  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at,
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
   u.username,
   u.first_name,
   u.last_name
@@ -402,6 +432,7 @@ type GetPostsByTagIDRow struct {
 	Status    sql.NullString `json:"status"`
 	CreatedAt sql.NullTime   `json:"created_at"`
 	UpdatedAt sql.NullTime   `json:"updated_at"`
+	Likes     int32          `json:"likes"`
 	Username  string         `json:"username"`
 	FirstName sql.NullString `json:"first_name"`
 	LastName  sql.NullString `json:"last_name"`
@@ -425,6 +456,7 @@ func (q *Queries) GetPostsByTagID(ctx context.Context, tagID int32) ([]GetPostsB
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Likes,
 			&i.Username,
 			&i.FirstName,
 			&i.LastName,
@@ -519,6 +551,30 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const incrementPostLikes = `-- name: IncrementPostLikes :one
+UPDATE posts
+SET likes = likes + 1
+WHERE id = $1
+RETURNING id, user_id, title, content, type, status, created_at, updated_at, likes
+`
+
+func (q *Queries) IncrementPostLikes(ctx context.Context, id int32) (Post, error) {
+	row := q.db.QueryRowContext(ctx, incrementPostLikes, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Content,
+		&i.Type,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Likes,
+	)
+	return i, err
+}
+
 const listPostComments = `-- name: ListPostComments :many
 SELECT 
   c.id, c.post_id, c.user_id, c.content, c.created_at,
@@ -606,10 +662,11 @@ func (q *Queries) ListPostTags(ctx context.Context, postID int32) ([]Tag, error)
 
 const listPosts = `-- name: ListPosts :many
 SELECT 
-  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at,
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
   u.username,
   COUNT(DISTINCT c.id) as comment_count,
-  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags,
+  p.likes
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN comments c ON p.id = c.post_id
@@ -636,9 +693,11 @@ type ListPostsRow struct {
 	Status       sql.NullString `json:"status"`
 	CreatedAt    sql.NullTime   `json:"created_at"`
 	UpdatedAt    sql.NullTime   `json:"updated_at"`
+	Likes        int32          `json:"likes"`
 	Username     sql.NullString `json:"username"`
 	CommentCount int64          `json:"comment_count"`
 	Tags         interface{}    `json:"tags"`
+	Likes_2      int32          `json:"likes_2"`
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
@@ -659,6 +718,166 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Likes,
+			&i.Username,
+			&i.CommentCount,
+			&i.Tags,
+			&i.Likes_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsByUser = `-- name: ListPostsByUser :many
+SELECT 
+    p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
+    u.username,
+    COUNT(DISTINCT c.id) as comment_count,
+    COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags,
+    p.likes
+FROM posts p
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN post_tags pt ON p.id = pt.post_id
+LEFT JOIN tags t ON pt.tag_id = t.id
+WHERE p.user_id = $1
+    AND ($2::text IS NULL OR p.status = $2)
+GROUP BY p.id, u.id
+ORDER BY p.created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListPostsByUserParams struct {
+	UserID  sql.NullInt32 `json:"user_id"`
+	Column2 string        `json:"column_2"`
+	Limit   int32         `json:"limit"`
+	Offset  int32         `json:"offset"`
+}
+
+type ListPostsByUserRow struct {
+	ID           int32          `json:"id"`
+	UserID       sql.NullInt32  `json:"user_id"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	Type         string         `json:"type"`
+	Status       sql.NullString `json:"status"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	UpdatedAt    sql.NullTime   `json:"updated_at"`
+	Likes        int32          `json:"likes"`
+	Username     sql.NullString `json:"username"`
+	CommentCount int64          `json:"comment_count"`
+	Tags         interface{}    `json:"tags"`
+	Likes_2      int32          `json:"likes_2"`
+}
+
+func (q *Queries) ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]ListPostsByUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByUser,
+		arg.UserID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsByUserRow{}
+	for rows.Next() {
+		var i ListPostsByUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Content,
+			&i.Type,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Likes,
+			&i.Username,
+			&i.CommentCount,
+			&i.Tags,
+			&i.Likes_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsOrderByLikes = `-- name: ListPostsOrderByLikes :many
+SELECT 
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
+  u.username,
+  COUNT(DISTINCT c.id) as comment_count,
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
+FROM posts p
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN post_tags pt ON p.id = pt.post_id
+LEFT JOIN tags t ON pt.tag_id = t.id
+WHERE ($1::text IS NULL OR p.status = $1)
+GROUP BY p.id, u.id
+ORDER BY p.likes DESC, p.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListPostsOrderByLikesParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+type ListPostsOrderByLikesRow struct {
+	ID           int32          `json:"id"`
+	UserID       sql.NullInt32  `json:"user_id"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	Type         string         `json:"type"`
+	Status       sql.NullString `json:"status"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	UpdatedAt    sql.NullTime   `json:"updated_at"`
+	Likes        int32          `json:"likes"`
+	Username     sql.NullString `json:"username"`
+	CommentCount int64          `json:"comment_count"`
+	Tags         interface{}    `json:"tags"`
+}
+
+func (q *Queries) ListPostsOrderByLikes(ctx context.Context, arg ListPostsOrderByLikesParams) ([]ListPostsOrderByLikesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsOrderByLikes, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsOrderByLikesRow{}
+	for rows.Next() {
+		var i ListPostsOrderByLikesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Content,
+			&i.Type,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Likes,
 			&i.Username,
 			&i.CommentCount,
 			&i.Tags,
@@ -801,6 +1020,70 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 	return items, nil
 }
 
+const listUsersOrderByPostLikes = `-- name: ListUsersOrderByPostLikes :many
+SELECT 
+  u.id, u.username, u.email, u.first_name, u.last_name, u.bio, u.created_at, u.updated_at,
+  COALESCE(SUM(p.likes), 0) as total_likes,
+  COUNT(DISTINCT p.id) as post_count
+FROM users u
+LEFT JOIN posts p ON u.id = p.user_id
+GROUP BY u.id
+ORDER BY total_likes DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListUsersOrderByPostLikesParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListUsersOrderByPostLikesRow struct {
+	ID         int32          `json:"id"`
+	Username   string         `json:"username"`
+	Email      string         `json:"email"`
+	FirstName  sql.NullString `json:"first_name"`
+	LastName   sql.NullString `json:"last_name"`
+	Bio        sql.NullString `json:"bio"`
+	CreatedAt  sql.NullTime   `json:"created_at"`
+	UpdatedAt  sql.NullTime   `json:"updated_at"`
+	TotalLikes interface{}    `json:"total_likes"`
+	PostCount  int64          `json:"post_count"`
+}
+
+func (q *Queries) ListUsersOrderByPostLikes(ctx context.Context, arg ListUsersOrderByPostLikesParams) ([]ListUsersOrderByPostLikesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersOrderByPostLikes, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersOrderByPostLikesRow{}
+	for rows.Next() {
+		var i ListUsersOrderByPostLikesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.Bio,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TotalLikes,
+			&i.PostCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updatePost = `-- name: UpdatePost :one
 UPDATE posts
 SET 
@@ -810,7 +1093,7 @@ SET
   status = COALESCE($5, status),
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, user_id, title, content, type, status, created_at, updated_at
+RETURNING id, user_id, title, content, type, status, created_at, updated_at, likes
 `
 
 type UpdatePostParams struct {
@@ -839,6 +1122,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Likes,
 	)
 	return i, err
 }

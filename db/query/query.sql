@@ -66,7 +66,8 @@ SELECT
   u.first_name,
   u.last_name,
   array_agg(DISTINCT t.name) as tags,
-  array_agg(DISTINCT i.file_path) as images
+  array_agg(DISTINCT i.file_path) as images,
+  p.likes
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -81,7 +82,8 @@ SELECT
   p.*,
   u.username,
   COUNT(DISTINCT c.id) as comment_count,
-  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags,
+  p.likes
 FROM posts p
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN comments c ON p.id = c.post_id
@@ -100,6 +102,18 @@ SET
   type = COALESCE($4, type),
   status = COALESCE($5, status),
   updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- name: IncrementPostLikes :one
+UPDATE posts
+SET likes = likes + 1
+WHERE id = $1
+RETURNING *;
+
+-- name: DecrementPostLikes :one
+UPDATE posts
+SET likes = GREATEST(likes - 1, 0)
 WHERE id = $1
 RETURNING *;
 
@@ -220,3 +234,48 @@ FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 JOIN users u ON p.user_id = u.id
 WHERE pt.tag_id = $1;
+
+-- name: ListPostsByUser :many
+SELECT 
+    p.*,
+    u.username,
+    COUNT(DISTINCT c.id) as comment_count,
+    COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags,
+    p.likes
+FROM posts p
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN post_tags pt ON p.id = pt.post_id
+LEFT JOIN tags t ON pt.tag_id = t.id
+WHERE p.user_id = $1
+    AND ($2::text IS NULL OR p.status = $2)
+GROUP BY p.id, u.id
+ORDER BY p.created_at DESC
+LIMIT $3 OFFSET $4;
+
+-- name: ListPostsOrderByLikes :many
+SELECT 
+  p.id, p.user_id, p.title, p.content, p.type, p.status, p.created_at, p.updated_at, p.likes,
+  u.username,
+  COUNT(DISTINCT c.id) as comment_count,
+  COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) as tags
+FROM posts p
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN post_tags pt ON p.id = pt.post_id
+LEFT JOIN tags t ON pt.tag_id = t.id
+WHERE ($1::text IS NULL OR p.status = $1)
+GROUP BY p.id, u.id
+ORDER BY p.likes DESC, p.created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: ListUsersOrderByPostLikes :many
+SELECT 
+  u.id, u.username, u.email, u.first_name, u.last_name, u.bio, u.created_at, u.updated_at,
+  COALESCE(SUM(p.likes), 0) as total_likes,
+  COUNT(DISTINCT p.id) as post_count
+FROM users u
+LEFT JOIN posts p ON u.id = p.user_id
+GROUP BY u.id
+ORDER BY total_likes DESC
+LIMIT $1 OFFSET $2;
