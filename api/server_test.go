@@ -26,6 +26,150 @@ func createTestToken(t *testing.T, maker util.TokenMaker, username string) strin
 	return token
 }
 
+func TestRemoveTagFromPost(t *testing.T) {
+	testCases := []struct {
+		name          string
+		postID        int32
+		tagID         int32
+		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:   "OK",
+			postID: 1,
+			tagID:  1,
+			buildStubs: func(store *mockdb.MockStore) {
+				// First expect GetPost for ownership verification
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{
+						ID: 1,
+						Username: sql.NullString{
+							String: "testuser1",
+							Valid:  true,
+						},
+					}, nil)
+
+				// Then expect DeletePostTag
+				store.EXPECT().
+					DeletePostTag(gomock.Any(), gomock.Eq(db.DeletePostTagParams{
+						PostID: 1,
+						TagID:  1,
+					})).
+					Times(1).
+					Return(nil)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:   "NotOwner",
+			postID: 1,
+			tagID:  1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{
+						ID: 1,
+						Username: sql.NullString{
+							String: "testuser2", // Different user
+							Valid:  true,
+						},
+					}, nil)
+
+				// DeletePostTag should not be called
+				store.EXPECT().
+					DeletePostTag(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name:   "PostNotFound",
+			postID: 1,
+			tagID:  1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{}, sql.ErrNoRows)
+
+				store.EXPECT().
+					DeletePostTag(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:   "NoAuthentication",
+			postID: 1,
+			tagID:  1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
+					DeletePostTag(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				// No authentication token
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/posts/%d/tags/%d", tc.postID, tc.tagID)
+			request, err := http.NewRequest(http.MethodDelete, url, nil)
+			require.NoError(t, err)
+
+			tc.setupAuth(t, request, server.tokenMaker)
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(t, recorder)
+		})
+	}
+}
+
 func createTestTokenSever(t *testing.T, server *Server, username string) string {
 	token, err := server.tokenMaker.CreateToken(username, 24*time.Hour)
 	require.NoError(t, err)
@@ -809,6 +953,157 @@ func TestDeletePost(t *testing.T) {
 			} else {
 				url = fmt.Sprintf("/api/v1/posts/%d", tc.postID)
 			}
+			request, err := http.NewRequest(http.MethodDelete, url, nil)
+			require.NoError(t, err)
+
+			tc.setupAuth(t, request, server.tokenMaker)
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(t, recorder)
+		})
+	}
+}
+
+func TestDeleteTag(t *testing.T) {
+	testCases := []struct {
+		name          string
+		tagID         int32
+		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:  "OK",
+			tagID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				// First expect GetUserByUsername
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Eq("testuser1")).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				// Then expect GetPostsByTagID
+				store.EXPECT().
+					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return([]db.Post{
+						{
+							ID: 1,
+							UserID: sql.NullInt32{
+								Int32: 1, // Same as authenticated user
+								Valid: true,
+							},
+						},
+					}, nil)
+
+				// Then expect DeleteTagFromPosts
+				store.EXPECT().
+					DeleteTagFromPosts(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(nil)
+
+				// Finally expect DeleteTag
+				store.EXPECT().
+					DeleteTag(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(nil)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:  "NoPostsWithTag",
+			tagID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Eq("testuser1")).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				store.EXPECT().
+					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return([]db.Post{}, nil)
+
+				// No further operations should be called
+				store.EXPECT().
+					DeleteTagFromPosts(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
+					DeleteTag(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name:  "NoOwnership",
+			tagID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Eq("testuser1")).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				store.EXPECT().
+					GetPostsByTagID(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return([]db.Post{
+						{
+							ID: 1,
+							UserID: sql.NullInt32{
+								Int32: 2, // Different user
+								Valid: true,
+							},
+						},
+					}, nil)
+
+				// No further operations should be called
+				store.EXPECT().
+					DeleteTagFromPosts(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
+					DeleteTag(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
+			}
+
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/tags/%d", tc.tagID)
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
