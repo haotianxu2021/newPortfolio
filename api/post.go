@@ -519,3 +519,42 @@ func (server *Server) removeTagFromPost(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "tag removed from post successfully"})
 }
+
+func (server *Server) getPostByTagID(ctx *gin.Context) {
+	// Parse tag ID from URL parameter
+	tagIDStr := ctx.Param("tagId")
+	tagID, err := strconv.ParseInt(tagIDStr, 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag id"})
+		return
+	}
+
+	// Get posts by tag ID
+	posts, err := server.store.GetPostsByTagID(ctx, int32(tagID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "no posts found with this tag"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert posts to response format
+	response := make([]gin.H, len(posts))
+	for i, post := range posts {
+		response[i] = gin.H{
+			"id":         post.ID,
+			"user_id":    post.UserID,
+			"title":      post.Title,
+			"content":    post.Content,
+			"type":       post.Type,
+			"status":     post.Status.String,
+			"created_at": post.CreatedAt,
+			"updated_at": post.UpdatedAt,
+			"username":   post.Username,
+		}
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
