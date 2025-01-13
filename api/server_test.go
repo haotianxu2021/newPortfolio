@@ -642,13 +642,58 @@ func TestDeletePost(t *testing.T) {
 			name:   "OK",
 			postID: 1,
 			buildStubs: func(store *mockdb.MockStore) {
+				// First expect GetPost for ownership verification
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{
+						ID: 1,
+						Username: sql.NullString{
+							String: "testuser1",
+							Valid:  true,
+						},
+					}, nil)
+
+				// Then expect DeletePost
 				store.EXPECT().
 					DeletePost(gomock.Any(), gomock.Eq(int32(1))).
 					Times(1).
 					Return(nil)
 			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:   "NotOwner",
+			postID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{
+						ID: 1,
+						Username: sql.NullString{
+							String: "testuser2", // Different user
+							Valid:  true,
+						},
+					}, nil)
+
+				// DeletePost should not be called
+				store.EXPECT().
+					DeletePost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 		{
@@ -656,23 +701,57 @@ func TestDeletePost(t *testing.T) {
 			postID: 1,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
 					DeletePost(gomock.Any(), gomock.Any()).
 					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 		{
-			name:   "UnauthorizedError",
+			name:   "NoAuthentication",
 			postID: 1,
 			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Any()).
+					Times(0)
 				store.EXPECT().
 					DeletePost(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				// No authentication token
+			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name:   "PostNotFound",
+			postID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{}, sql.ErrNoRows)
+
+				store.EXPECT().
+					DeletePost(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -680,9 +759,24 @@ func TestDeletePost(t *testing.T) {
 			postID: 1,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					GetPost(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.GetPostRow{
+						ID: 1,
+						Username: sql.NullString{
+							String: "testuser1",
+							Valid:  true,
+						},
+					}, nil)
+
+				store.EXPECT().
 					DeletePost(gomock.Any(), gomock.Eq(int32(1))).
 					Times(1).
 					Return(sql.ErrConnDone)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -718,12 +812,140 @@ func TestDeletePost(t *testing.T) {
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
-			if tc.name != "UnauthorizedError" {
-				// Create token for the post owner (user_id 1)
-				token := createTestTokenSever(t, server, "testuser1")
+			tc.setupAuth(t, request, server.tokenMaker)
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(t, recorder)
+		})
+	}
+}
+
+func TestDeleteImage(t *testing.T) {
+	testCases := []struct {
+		name          string
+		imageID       int32
+		buildStubs    func(store *mockdb.MockStore)
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:    "OK",
+			imageID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				// First expect GetImage for ownership verification
+				store.EXPECT().
+					GetImage(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.Image{
+						ID: 1,
+						UserID: sql.NullInt32{
+							Int32: 1,
+							Valid: true,
+						},
+					}, nil)
+
+				// Then expect GetUserByUsername
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Eq("testuser1")).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				// Finally expect DeleteImage
+				store.EXPECT().
+					DeleteImage(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(nil)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
 				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "NotOwner",
+			imageID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetImage(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.Image{
+						ID: 1,
+						UserID: sql.NullInt32{
+							Int32: 2, // Different user
+							Valid: true,
+						},
+					}, nil)
+
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Eq("testuser1")).
+					Times(1).
+					Return(db.User{ID: 1}, nil)
+
+				// DeleteImage should not be called
+				store.EXPECT().
+					DeleteImage(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name:    "ImageNotFound",
+			imageID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetImage(gomock.Any(), gomock.Eq(int32(1))).
+					Times(1).
+					Return(db.Image{}, sql.ErrNoRows)
+
+				store.EXPECT().
+					GetUserByUsername(gomock.Any(), gomock.Any()).
+					Times(0)
+
+				store.EXPECT().
+					DeleteImage(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker util.TokenMaker) {
+				token := createTestToken(t, tokenMaker, "testuser1")
+				addAuthHeader(request, token)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			config := util.Config{
+				TokenSymmetricKey: "12345678901234567890123456789012",
 			}
 
+			server, err := NewServer(store, config)
+			require.NoError(t, err)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/images/%d", tc.imageID)
+			request, err := http.NewRequest(http.MethodDelete, url, nil)
+			require.NoError(t, err)
+
+			tc.setupAuth(t, request, server.tokenMaker)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
 		})
